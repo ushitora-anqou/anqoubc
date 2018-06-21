@@ -14,7 +14,10 @@ enum {
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_VARIABLE,
-    TOKEN_OPERATOR,
+    TOKEN_ADD,
+    TOKEN_SUB,
+    TOKEN_MUL,
+    TOKEN_DIV,
 };
 
 struct Token {
@@ -27,14 +30,21 @@ struct Token {
     Token *next;
 };
 
-Token *new_numeric_token(float num)
+Token *new_simple_token(int kind)
 {
     Token *token;
 
     token = (Token *)malloc(sizeof(Token));
     token->next = NULL;
+    token->kind = kind;
+    return token;
+}
+
+Token *new_numeric_token(float num)
+{
+    Token *token = new_simple_token(TOKEN_NUMERIC);
+
     token->data.num = num;
-    token->kind = TOKEN_NUMERIC;
     return token;
 }
 
@@ -64,6 +74,27 @@ Token *tokenize(FILE *fp, int eval)
                     st = TK_ST_NUMERIC;
                     break;
                 }
+                switch (ch) {
+                    case '+':
+                        token = new_simple_token(TOKEN_ADD);
+                        break;
+                    case '-':
+                        token = new_simple_token(TOKEN_SUB);
+                        break;
+                    case '*':
+                        token = new_simple_token(TOKEN_MUL);
+                        break;
+                    case '/':
+                        token = new_simple_token(TOKEN_DIV);
+                        break;
+                    case '(':
+                        token = new_simple_token(TOKEN_LPAREN);
+                        break;
+                    case ')':
+                        token = new_simple_token(TOKEN_RPAREN);
+                        break;
+                }
+                if (token != NULL) break;
 
                 return NULL;
 
@@ -130,11 +161,35 @@ int main(void)
                     printf("%f ", token->data.num);
                     break;
 
+                case TOKEN_ADD:
+                    printf("+ ");
+                    break;
+
+                case TOKEN_SUB:
+                    printf("- ");
+                    break;
+
+                case TOKEN_MUL:
+                    printf("* ");
+                    break;
+
+                case TOKEN_DIV:
+                    printf("/ ");
+                    break;
+
+                case TOKEN_LPAREN:
+                    printf("( ");
+                    break;
+
+                case TOKEN_RPAREN:
+                    printf(") ");
+                    break;
+
                 default:
                     assert(false);
             }
-            puts("");
         }
+        puts("");
 
         free_token_list(token_list);
     }
