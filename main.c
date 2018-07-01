@@ -2,9 +2,12 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define true 1
 #define false 0
+
+float fmax(float lhs, float rhs) { return lhs < rhs ? rhs : lhs; }
 
 typedef enum TOKEN_KIND TOKEN_KIND;
 typedef struct Token Token;
@@ -522,16 +525,212 @@ void dump_token_list(Token *token)
     puts("");
 }
 
+typedef struct Codes Codes;
+typedef struct ObjEnv ObjEnv;
+
+struct Codes {
+    char **data;
+    int size, rsved_size;
+};
+
+Codes *new_codes()
+{
+    Codes *ret;
+
+    ret = (Codes *)malloc(sizeof(Codes));
+    assert(ret != NULL);
+    ret->data = NULL;
+    ret->size = 0;
+    ret->rsved_size = 10;
+    return ret;
+}
+
+void free_codes(Codes *this)
+{
+    int i;
+
+    for (i = 0; i < this->size; i++) free(this->data[i]);
+    free(this);
+}
+
+void codes_dump(Codes *this, FILE *fh)
+{
+    int i;
+
+    for (i = 0; i < this->size; i++) {
+        fputs(this->data[i], fh);
+        fputc('\n', fh);
+    }
+}
+
+void codes_append(Codes *this, const char *code)
+{
+    char *data;
+
+    if (this->data == NULL || this->size == this->rsved_size) {
+        this->data =
+            (char **)realloc(this->data, sizeof(char *) * this->rsved_size * 2);
+        assert(this->data != NULL);
+        this->rsved_size *= 2;
+    }
+
+    data = (char *)malloc(sizeof(char) * (strlen(code) + 1));
+    assert(data != NULL);
+    strcpy(data, code);
+    this->data[this->size++] = data;
+}
+
+struct ObjEnv {
+    Codes *codes;
+    int stack_idx, stack_max_idx;
+    int nlabel;
+};
+
+ObjEnv *new_objenv()
+{
+    ObjEnv *ret;
+
+    ret = (ObjEnv *)malloc(sizeof(ObjEnv));
+    assert(ret != NULL);
+    ret->codes = new_codes();
+    ret->stack_idx = ret->stack_max_idx = ret->nlabel = 0;
+    return ret;
+}
+
+void free_objenv(ObjEnv *this)
+{
+    free_codes(this->codes);
+    free(this);
+}
+
+Codes *objenv_swap_codes(ObjEnv *this, Codes *rhs)
+{
+    Codes *tmp;
+
+    tmp = this->codes;
+    this->codes = rhs;
+    return tmp;
+}
+
+void append_code(ObjEnv *env, const char *code)
+{
+    codes_append(env->codes, code);
+}
+
+void write_obj_detail(AST *ast, ObjEnv *env)
+{
+    if (ast == NULL) return;
+
+    switch (ast->kind) {
+        case AST_PROG: {
+            ASTProg *prog = (ASTProg *)ast;
+            write_obj_detail(prog->stmt, env);
+            write_obj_detail((AST *)prog->next, env);
+            return;
+        }
+
+        case AST_ADD:
+        case AST_SUB:
+        case AST_MUL:
+        case AST_DIV: {
+            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
+            char op[32], buf[256];
+
+            write_obj_detail(bin->rhs, env);
+            sprintf(buf, "movss %%xmm0, -%d(%%rbp)", ++env->stack_idx * 4);
+            append_code(env, buf);
+            env->stack_max_idx = fmax(env->stack_max_idx, env->stack_idx);
+            write_obj_detail(bin->lhs, env);
+
+            switch (ast->kind) {
+                case AST_ADD:
+                    strcpy(op, "addss");
+                    break;
+                case AST_SUB:
+                    strcpy(op, "subss");
+                    break;
+                case AST_MUL:
+                    strcpy(op, "mulss");
+                    break;
+                case AST_DIV:
+                    strcpy(op, "divss");
+                    break;
+            }
+
+            sprintf(buf, "%s -%d(%%rbp), %%xmm0", op, env->stack_idx-- * 4);
+            append_code(env, buf);
+
+            return;
+        }
+
+        case AST_NUMERIC: {
+            ASTNumeric *num = (ASTNumeric *)ast;
+            char buf[256];
+
+            append_code(env, ".data");
+            sprintf(buf, ".L%d:", env->nlabel++);
+            append_code(env, buf);
+            sprintf(buf, ".float %f", num->num);
+            append_code(env, buf);
+            append_code(env, ".text");
+            sprintf(buf, "movss .L%d(%%rip), %%xmm0", env->nlabel - 1);
+            append_code(env, buf);
+            return;
+        }
+    }
+}
+
+void write_obj(ASTProg *prog, FILE *fh)
+{
+    ObjEnv *env;
+    Codes *header;
+    char buf[256];
+
+    env = new_objenv();
+
+    append_code(env, ".data");
+    append_code(env, "format:");
+    append_code(env, ".string \"%f\\n\"");
+    append_code(env, ".text");
+    append_code(env, ".globl main");
+    append_code(env, "main:");
+    append_code(env, "push %rbp");
+    append_code(env, "mov %rsp, %rbp");
+    header = objenv_swap_codes(env, new_codes());
+
+    write_obj_detail((AST *)prog, env);
+
+    if (env->stack_max_idx > 0) {
+        sprintf(buf, "sub $%d, %%rsp", ((env->stack_max_idx / 16) + 1) * 16);
+        codes_append(header, buf);
+    }
+
+    append_code(env, "cvtss2sd %xmm0, %xmm0");
+    append_code(env, "lea format(%rip), %rdi");
+    append_code(env, "call printf");
+    append_code(env, "leave");
+    append_code(env, "ret");
+
+    codes_dump(header, fh);
+    codes_dump(env->codes, fh);
+
+    free_codes(header);
+    free_objenv(env);
+
+    return;
+}
+
 #include "test.c"
 
 int main(void)
 {
-    Token *token_list;
-    ASTProg *prog;
-
     execute_test();
 
     while (1) {
+        Token *token_list;
+        ASTProg *prog;
+        FILE *fh;
+
         token_list = tokenize(stdin, 1);
         if (token_list == NULL) {
             printf("Error: can't tokenize.\n");
@@ -543,6 +742,11 @@ int main(void)
         printf("debug\n");
         fflush(stdout);
         eval_ast((AST *)prog);
+
+        fh = fopen("outout.s", "w");
+        assert(fh != NULL);
+        write_obj(prog, fh);
+        fclose(fh);
 
         free_token_list(token_list);
         free_ast((AST *)prog);
