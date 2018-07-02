@@ -106,7 +106,7 @@ enum {
 
 Token *tokenize(FILE *fp)
 {
-    char buf[100];
+    char buf[256]; /* TODO: should be enough??? */
     int bufidx, ch, st = TK_ST_INITIAL;
     Token *token_list_tail = NULL, *token_list_head = NULL;
 
@@ -578,6 +578,18 @@ void codes_append(Codes *this, const char *code)
     this->data[this->size++] = data;
 }
 
+void codes_appendf(Codes *this, const char *format, ...)
+{
+    va_list args;
+    char buf[256]; /* TODO:should be enough??? */
+
+    va_start(args, format);
+    vsprintf(buf, format, args);
+    va_end(args);
+
+    codes_append(this, buf);
+}
+
 struct ObjEnv {
     Codes *codes;
     int stack_idx, stack_max_idx;
@@ -610,11 +622,6 @@ Codes *objenv_swap_codes(ObjEnv *this, Codes *rhs)
     return tmp;
 }
 
-void append_code(ObjEnv *env, const char *code)
-{
-    codes_append(env->codes, code);
-}
-
 void write_obj_detail(AST *ast, ObjEnv *env)
 {
     if (ast == NULL) return;
@@ -632,11 +639,11 @@ void write_obj_detail(AST *ast, ObjEnv *env)
         case AST_MUL:
         case AST_DIV: {
             ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            char op[32], buf[256];
+            char op[32];
 
             write_obj_detail(bin->rhs, env);
-            sprintf(buf, "movss %%xmm0, -%d(%%rbp)", ++env->stack_idx * 4);
-            append_code(env, buf);
+            codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
+                          ++env->stack_idx * 4);
             env->stack_max_idx = fmax(env->stack_max_idx, env->stack_idx);
             write_obj_detail(bin->lhs, env);
 
@@ -655,24 +662,21 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                     break;
             }
 
-            sprintf(buf, "%s -%d(%%rbp), %%xmm0", op, env->stack_idx-- * 4);
-            append_code(env, buf);
+            codes_appendf(env->codes, "%s -%d(%%rbp), %%xmm0", op,
+                          env->stack_idx-- * 4);
 
             return;
         }
 
         case AST_NUMERIC: {
             ASTNumeric *num = (ASTNumeric *)ast;
-            char buf[256];
 
-            append_code(env, ".data");
-            sprintf(buf, ".L%d:", env->nlabel++);
-            append_code(env, buf);
-            sprintf(buf, ".float %f", num->num);
-            append_code(env, buf);
-            append_code(env, ".text");
-            sprintf(buf, "movss .L%d(%%rip), %%xmm0", env->nlabel - 1);
-            append_code(env, buf);
+            codes_append(env->codes, ".data");
+            codes_appendf(env->codes, ".L%d:", env->nlabel++);
+            codes_appendf(env->codes, ".float %f", num->num);
+            codes_append(env->codes, ".text");
+            codes_appendf(env->codes, "movss .L%d(%%rip), %%xmm0",
+                          env->nlabel - 1);
             return;
         }
     }
@@ -682,32 +686,30 @@ void write_obj(ASTProg *prog, FILE *fh)
 {
     ObjEnv *env;
     Codes *header;
-    char buf[256];
 
     env = new_objenv();
 
-    append_code(env, ".data");
-    append_code(env, "format:");
-    append_code(env, ".string \"%f\\n\"");
-    append_code(env, ".text");
-    append_code(env, ".globl main");
-    append_code(env, "main:");
-    append_code(env, "push %rbp");
-    append_code(env, "mov %rsp, %rbp");
+    codes_append(env->codes, ".data");
+    codes_append(env->codes, "format:");
+    codes_append(env->codes, ".string \"%f\\n\"");
+    codes_append(env->codes, ".text");
+    codes_append(env->codes, ".globl main");
+    codes_append(env->codes, "main:");
+    codes_append(env->codes, "push %rbp");
+    codes_append(env->codes, "mov %rsp, %rbp");
     header = objenv_swap_codes(env, new_codes());
 
     write_obj_detail((AST *)prog, env);
 
-    if (env->stack_max_idx > 0) {
-        sprintf(buf, "sub $%d, %%rsp", ((env->stack_max_idx / 16) + 1) * 16);
-        codes_append(header, buf);
-    }
+    if (env->stack_max_idx > 0)
+        codes_appendf(header, "sub $%d, %%rsp",
+                      ((env->stack_max_idx / 16) + 1) * 16);
 
-    append_code(env, "cvtss2sd %xmm0, %xmm0");
-    append_code(env, "lea format(%rip), %rdi");
-    append_code(env, "call printf");
-    append_code(env, "leave");
-    append_code(env, "ret");
+    codes_append(env->codes, "cvtss2sd %xmm0, %xmm0");
+    codes_append(env->codes, "lea format(%rip), %rdi");
+    codes_append(env->codes, "call printf");
+    codes_append(env->codes, "leave");
+    codes_append(env->codes, "ret");
 
     codes_dump(header, fh);
     codes_dump(env->codes, fh);
