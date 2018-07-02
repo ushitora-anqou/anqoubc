@@ -63,7 +63,7 @@ struct ASTBinaryOp {
 
 Token *new_simple_token(int kind);
 Token *new_numeric_token(float num);
-Token *tokenize(FILE *fp, int eval);
+Token *tokenize(FILE *fp);
 void free_token_list(Token *token_list);
 ASTNumeric *new_ast_numeric(float num);
 ASTBinaryOp *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
@@ -104,7 +104,7 @@ enum {
     TK_ST_VARIABLE,
 };
 
-Token *tokenize(FILE *fp, int eval)
+Token *tokenize(FILE *fp)
 {
     char buf[100];
     int bufidx, ch, st = TK_ST_INITIAL;
@@ -115,7 +115,6 @@ Token *tokenize(FILE *fp, int eval)
 
         switch (st) {
             case TK_ST_INITIAL:
-                if (eval && ch == '\n') goto ret;
                 if (isspace(ch)) break;
                 if (isdigit(ch)) {
                     bufidx = 0;
@@ -178,7 +177,6 @@ Token *tokenize(FILE *fp, int eval)
         }
     }
 
-ret:
     return token_list_head;
 }
 
@@ -541,7 +539,7 @@ Codes *new_codes()
     assert(ret != NULL);
     ret->data = NULL;
     ret->size = 0;
-    ret->rsved_size = 10;
+    ret->rsved_size = 1;
     return ret;
 }
 
@@ -722,35 +720,33 @@ void write_obj(ASTProg *prog, FILE *fh)
 
 #include "test.c"
 
-int main(void)
+int main(int argc, char **argv)
 {
+    Token *token_list;
+    ASTProg *prog;
+    FILE *fh;
+
     execute_test();
 
-    while (1) {
-        Token *token_list;
-        ASTProg *prog;
-        FILE *fh;
+    assert(argc == 3);
+    fh = fopen(argv[1], "r");
+    assert(fh != NULL);
 
-        token_list = tokenize(stdin, 1);
-        if (token_list == NULL) {
-            printf("Error: can't tokenize.\n");
-            return 1;
-        }
-        dump_token_list(token_list);
+    token_list = tokenize(fh);
+    assert(token_list != NULL);
+    fclose(fh);
+    dump_token_list(token_list);
 
-        prog = parse(token_list);
-        printf("debug\n");
-        fflush(stdout);
-        eval_ast((AST *)prog);
+    prog = parse(token_list);
+    eval_ast((AST *)prog);
 
-        fh = fopen("outout.s", "w");
-        assert(fh != NULL);
-        write_obj(prog, fh);
-        fclose(fh);
+    fh = fopen(argv[2], "w");
+    assert(fh != NULL);
+    write_obj(prog, fh);
+    fclose(fh);
 
-        free_token_list(token_list);
-        free_ast((AST *)prog);
-    }
+    free_token_list(token_list);
+    free_ast((AST *)prog);
 
     return 0;
 }

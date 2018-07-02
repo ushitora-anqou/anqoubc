@@ -1,5 +1,6 @@
-#define ANQOU_ASSERT assert
 #include <math.h>
+
+#define ANQOU_ASSERT assert
 
 void test_tokenize(const char *filepath,
                    void (*testfunc)(Token *token_list, FILE *fp))
@@ -9,7 +10,7 @@ void test_tokenize(const char *filepath,
 
     fp = fopen(filepath, "r");
     ANQOU_ASSERT(fp != NULL);
-    token_list = tokenize(fp, 0);
+    token_list = tokenize(fp);
     fclose(fp);
 
     fp = fopen(filepath, "r");
