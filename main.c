@@ -10,7 +10,7 @@
 float fmax(float lhs, float rhs) { return lhs < rhs ? rhs : lhs; }
 
 enum {
-    tNUMERIC,
+    tNUMBER,
     tLPAREN,
     tRPAREN,
     tVARIABLE,
@@ -33,7 +33,7 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
-enum { AST_NUMERIC, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
+enum { AST_NUMBER, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
 
 typedef struct {
     int kind;
@@ -48,7 +48,7 @@ typedef struct ASTProg {
 typedef struct {
     AST super;
     float num;
-} ASTNumeric;
+} ASTNumber;
 
 typedef struct {
     AST super;
@@ -56,14 +56,14 @@ typedef struct {
 } ASTBinaryOp;
 
 Token *new_simple_token(int kind);
-Token *new_numeric_token(float num);
+Token *new_number_token(float num);
 Token *tokenize(FILE *fp);
 void free_token_list(Token *token_list);
-ASTNumeric *new_ast_numeric(float num);
+ASTNumber *new_ast_number(float num);
 ASTBinaryOp *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
 Token *pop_token(Token **token_list);
 Token *peek_token(Token **token_list);
-Token *pop_numeric_token(Token **token_list);
+Token *pop_number_token(Token **token_list);
 Token *parse_match(Token **token_list, int kind);
 AST *parse_factor(Token **token_list);
 AST *parse_term_detail(Token **token_list, AST *factor);
@@ -84,9 +84,9 @@ Token *new_simple_token(int kind)
     return token;
 }
 
-Token *new_numeric_token(float num)
+Token *new_number_token(float num)
 {
-    Token *token = new_simple_token(tNUMERIC);
+    Token *token = new_simple_token(tNUMBER);
 
     token->data.num = num;
     return token;
@@ -94,7 +94,7 @@ Token *new_numeric_token(float num)
 
 enum {
     TK_ST_INITIAL,
-    TK_ST_NUMERIC,
+    TK_ST_NUMBER,
     TK_ST_VARIABLE,
 };
 
@@ -117,7 +117,7 @@ Token *tokenize(FILE *fp)
                     bufidx = 0;
                     assert(bufidx < sizeof(buf) - 1);
                     buf[bufidx++] = ch;
-                    st = TK_ST_NUMERIC;
+                    st = TK_ST_NUMBER;
                     break;
                 }
                 switch (ch) {
@@ -147,7 +147,7 @@ Token *tokenize(FILE *fp)
 
                 return NULL;
 
-            case TK_ST_NUMERIC:
+            case TK_ST_NUMBER:
                 if (isdigit(ch) || ch == '.') {
                     assert(bufidx < sizeof(buf) - 1);
                     buf[bufidx++] = ch;
@@ -156,7 +156,7 @@ Token *tokenize(FILE *fp)
 
                 assert(bufidx < sizeof(buf) - 1);
                 buf[bufidx++] = '\0';
-                token = new_numeric_token(atof(buf));
+                token = new_number_token(atof(buf));
 
                 st = TK_ST_INITIAL;
 
@@ -193,13 +193,13 @@ void free_token_list(Token *token_list)
     }
 }
 
-ASTNumeric *new_ast_numeric(float num)
+ASTNumber *new_ast_number(float num)
 {
-    ASTNumeric *ast;
+    ASTNumber *ast;
 
-    ast = (ASTNumeric *)malloc(sizeof(ASTNumeric));
+    ast = (ASTNumber *)malloc(sizeof(ASTNumber));
     assert(ast != NULL);
-    ast->super.kind = AST_NUMERIC;
+    ast->super.kind = AST_NUMBER;
     ast->num = num;
 
     return ast;
@@ -229,11 +229,11 @@ Token *pop_token(Token **token_list)
 
 Token *peek_token(Token **token_list) { return *token_list; }
 
-Token *pop_numeric_token(Token **token_list)
+Token *pop_number_token(Token **token_list)
 {
     Token *token = peek_token(token_list);
 
-    if (token == NULL || token->kind != tNUMERIC) return NULL;
+    if (token == NULL || token->kind != tNUMBER) return NULL;
     return pop_token(token_list);
 }
 
@@ -256,15 +256,15 @@ AST *parse_factor(Token **token_list)
         assert(parse_match(token_list, tRPAREN) != NULL);
     }
     else {
-        /* numeric */
+        /* number */
         Token *token;
 
-        token = pop_numeric_token(token_list);
+        token = pop_number_token(token_list);
         if (token == NULL) return NULL;
 
         dump_token_list(*token_list);
 
-        ast = (AST *)new_ast_numeric(token->data.num);
+        ast = (AST *)new_ast_number(token->data.num);
     }
 
     return ast;
@@ -438,8 +438,8 @@ float eval_ast(AST *ast)
             return eval_ast(bin->lhs) / eval_ast(bin->rhs);
         }
 
-        case AST_NUMERIC: {
-            ASTNumeric *num = (ASTNumeric *)ast;
+        case AST_NUMBER: {
+            ASTNumber *num = (ASTNumber *)ast;
             return num->num;
         }
     }
@@ -471,8 +471,8 @@ void free_ast(AST *ast)
             return;
         }
 
-        case AST_NUMERIC: {
-            ASTNumeric *num = (ASTNumeric *)ast;
+        case AST_NUMBER: {
+            ASTNumber *num = (ASTNumber *)ast;
             free(num);
             return;
         }
@@ -485,7 +485,7 @@ void dump_token_list(Token *token)
 {
     for (; token != NULL; token = token->next) {
         switch (token->kind) {
-            case tNUMERIC:
+            case tNUMBER:
                 printf("%f ", token->data.num);
                 break;
 
@@ -668,8 +668,8 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             return;
         }
 
-        case AST_NUMERIC: {
-            ASTNumeric *num = (ASTNumeric *)ast;
+        case AST_NUMBER: {
+            ASTNumber *num = (ASTNumber *)ast;
 
             codes_append(env->codes, ".data");
             codes_appendf(env->codes, ".L%d:", env->nlabel++);

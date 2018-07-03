@@ -43,14 +43,14 @@ void execute_test()
 {
     test_new_simple_token();
 
-    test_tokenize("0+0;", tNUMERIC, tADD, tNUMERIC, tSEMICOLON, tEOF);
-    test_tokenize("0+0+0+0+0;", tNUMERIC, tADD, tNUMERIC, tADD, tNUMERIC, tADD,
-                  tNUMERIC, tADD, tNUMERIC, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0+0;", tNUMERIC, tADD, tNUMERIC, tMUL, tNUMERIC, tADD,
-                  tNUMERIC, tADD, tNUMERIC, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0-0;", tNUMERIC, tADD, tNUMERIC, tMUL, tNUMERIC, tADD,
-                  tNUMERIC, tSUB, tNUMERIC, tSEMICOLON, tEOF);
-    test_tokenize("(0+0)*0+0-0;", tLPAREN, tNUMERIC, tADD, tNUMERIC, tRPAREN,
-                  tMUL, tNUMERIC, tADD, tNUMERIC, tSUB, tNUMERIC, tSEMICOLON,
+    test_tokenize("0+0;", tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
+    test_tokenize("0+0+0+0+0;", tNUMBER, tADD, tNUMBER, tADD, tNUMBER, tADD,
+                  tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0+0;", tNUMBER, tADD, tNUMBER, tMUL, tNUMBER, tADD,
+                  tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0-0;", tNUMBER, tADD, tNUMBER, tMUL, tNUMBER, tADD,
+                  tNUMBER, tSUB, tNUMBER, tSEMICOLON, tEOF);
+    test_tokenize("(0+0)*0+0-0;", tLPAREN, tNUMBER, tADD, tNUMBER, tRPAREN,
+                  tMUL, tNUMBER, tADD, tNUMBER, tSUB, tNUMBER, tSEMICOLON,
                   tEOF);
 }
