@@ -9,23 +9,20 @@
 
 float fmax(float lhs, float rhs) { return lhs < rhs ? rhs : lhs; }
 
-typedef enum TOKEN_KIND TOKEN_KIND;
-typedef struct Token Token;
-
 enum {
-    TOKEN_NUMERIC,
-    TOKEN_LPAREN,
-    TOKEN_RPAREN,
-    TOKEN_VARIABLE,
-    TOKEN_ADD,
-    TOKEN_SUB,
-    TOKEN_MUL,
-    TOKEN_DIV,
-    TOKEN_SEMICOLON,
-    TOKEN_EOF,
+    tNUMERIC,
+    tLPAREN,
+    tRPAREN,
+    tVARIABLE,
+    tADD,
+    tSUB,
+    tMUL,
+    tDIV,
+    tSEMICOLON,
+    tEOF,
 };
 
-struct Token {
+typedef struct Token {
     int kind;
 
     union {
@@ -33,35 +30,30 @@ struct Token {
         char str[10];
     } data;
 
-    Token *next;
-};
+    struct Token *next;
+} Token;
 
 enum { AST_NUMERIC, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
 
-typedef struct AST AST;
-typedef struct ASTNumeric ASTNumeric;
-typedef struct ASTBinaryOp ASTBinaryOp;
-typedef struct ASTProg ASTProg;
-
-struct AST {
+typedef struct {
     int kind;
-};
+} AST;
 
-struct ASTProg {
+typedef struct ASTProg {
     AST super;
     AST *stmt;
-    ASTProg *next;
-};
+    struct ASTProg *next;
+} ASTProg;
 
-struct ASTNumeric {
+typedef struct {
     AST super;
     float num;
-};
+} ASTNumeric;
 
-struct ASTBinaryOp {
+typedef struct {
     AST super;
     AST *lhs, *rhs;
-};
+} ASTBinaryOp;
 
 Token *new_simple_token(int kind);
 Token *new_numeric_token(float num);
@@ -94,7 +86,7 @@ Token *new_simple_token(int kind)
 
 Token *new_numeric_token(float num)
 {
-    Token *token = new_simple_token(TOKEN_NUMERIC);
+    Token *token = new_simple_token(tNUMERIC);
 
     token->data.num = num;
     return token;
@@ -130,25 +122,25 @@ Token *tokenize(FILE *fp)
                 }
                 switch (ch) {
                     case '+':
-                        token = new_simple_token(TOKEN_ADD);
+                        token = new_simple_token(tADD);
                         break;
                     case '-':
-                        token = new_simple_token(TOKEN_SUB);
+                        token = new_simple_token(tSUB);
                         break;
                     case '*':
-                        token = new_simple_token(TOKEN_MUL);
+                        token = new_simple_token(tMUL);
                         break;
                     case '/':
-                        token = new_simple_token(TOKEN_DIV);
+                        token = new_simple_token(tDIV);
                         break;
                     case '(':
-                        token = new_simple_token(TOKEN_LPAREN);
+                        token = new_simple_token(tLPAREN);
                         break;
                     case ')':
-                        token = new_simple_token(TOKEN_RPAREN);
+                        token = new_simple_token(tRPAREN);
                         break;
                     case ';':
-                        token = new_simple_token(TOKEN_SEMICOLON);
+                        token = new_simple_token(tSEMICOLON);
                         break;
                 }
                 if (token != NULL) break;
@@ -182,8 +174,8 @@ Token *tokenize(FILE *fp)
         }
     }
 
-    token = new_simple_token(TOKEN_EOF);
-    // TODO: duplicate code
+    token = new_simple_token(tEOF);
+    /* TODO: duplicate code */
     if (token_list_tail != NULL) token_list_tail->next = token;
     token_list_tail = token;
     if (token_list_head == NULL) token_list_head = token_list_tail;
@@ -241,7 +233,7 @@ Token *pop_numeric_token(Token **token_list)
 {
     Token *token = peek_token(token_list);
 
-    if (token == NULL || token->kind != TOKEN_NUMERIC) return NULL;
+    if (token == NULL || token->kind != tNUMERIC) return NULL;
     return pop_token(token_list);
 }
 
@@ -258,10 +250,10 @@ AST *parse_factor(Token **token_list)
 {
     AST *ast;
 
-    if (parse_match(token_list, TOKEN_LPAREN) != NULL) {
+    if (parse_match(token_list, tLPAREN) != NULL) {
         /* (expr) */
         ast = parse_expr(token_list);
-        assert(parse_match(token_list, TOKEN_RPAREN) != NULL);
+        assert(parse_match(token_list, tRPAREN) != NULL);
     }
     else {
         /* numeric */
@@ -283,7 +275,7 @@ AST *parse_term_detail(Token **token_list, AST *factor)
     Token *op;
     AST *ast = factor;
 
-    if ((op = parse_match(token_list, TOKEN_MUL)) != NULL) {
+    if ((op = parse_match(token_list, tMUL)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = factor;
@@ -292,7 +284,7 @@ AST *parse_term_detail(Token **token_list, AST *factor)
         ast = (AST *)new_ast_binary_op(AST_MUL, lhs, rhs);
         ast = parse_term_detail(token_list, ast);
     }
-    else if ((op = parse_match(token_list, TOKEN_DIV)) != NULL) {
+    else if ((op = parse_match(token_list, tDIV)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = factor;
@@ -328,7 +320,7 @@ AST *parse_expr_detail(Token **token_list, AST *term)
     Token *op;
     AST *ast = term;
 
-    if ((op = parse_match(token_list, TOKEN_ADD)) != NULL) {
+    if ((op = parse_match(token_list, tADD)) != NULL) {
         AST *lhs, *rhs;
 
         dump_token_list(*token_list);
@@ -339,7 +331,7 @@ AST *parse_expr_detail(Token **token_list, AST *term)
         ast = (AST *)new_ast_binary_op(AST_ADD, lhs, rhs);
         ast = parse_expr_detail(token_list, ast);
     }
-    else if ((op = parse_match(token_list, TOKEN_SUB)) != NULL) {
+    else if ((op = parse_match(token_list, tSUB)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = term;
@@ -380,7 +372,7 @@ AST *parse_stmt(Token **token_list)
 
     ast = parse_expr(token_list);
     if (ast == NULL) return NULL;
-    assert(parse_match(token_list, TOKEN_SEMICOLON) != NULL);
+    assert(parse_match(token_list, tSEMICOLON) != NULL);
     dump_token_list(*token_list);
 
     return ast;
@@ -493,35 +485,35 @@ void dump_token_list(Token *token)
 {
     for (; token != NULL; token = token->next) {
         switch (token->kind) {
-            case TOKEN_NUMERIC:
+            case tNUMERIC:
                 printf("%f ", token->data.num);
                 break;
 
-            case TOKEN_ADD:
+            case tADD:
                 printf("+ ");
                 break;
 
-            case TOKEN_SUB:
+            case tSUB:
                 printf("- ");
                 break;
 
-            case TOKEN_MUL:
+            case tMUL:
                 printf("* ");
                 break;
 
-            case TOKEN_DIV:
+            case tDIV:
                 printf("/ ");
                 break;
 
-            case TOKEN_LPAREN:
+            case tLPAREN:
                 printf("( ");
                 break;
 
-            case TOKEN_RPAREN:
+            case tRPAREN:
                 printf(") ");
                 break;
 
-            case TOKEN_SEMICOLON:
+            case tSEMICOLON:
                 printf(";\n");
                 break;
 
@@ -534,13 +526,10 @@ void dump_token_list(Token *token)
     puts("");
 }
 
-typedef struct Codes Codes;
-typedef struct ObjEnv ObjEnv;
-
-struct Codes {
+typedef struct {
     char **data;
     int size, rsved_size;
-};
+} Codes;
 
 Codes *new_codes()
 {
@@ -601,11 +590,11 @@ void codes_appendf(Codes *this, const char *format, ...)
     codes_append(this, buf);
 }
 
-struct ObjEnv {
+typedef struct {
     Codes *codes;
     int stack_idx, stack_max_idx;
     int nlabel;
-};
+} ObjEnv;
 
 ObjEnv *new_objenv()
 {
