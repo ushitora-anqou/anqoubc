@@ -2,64 +2,64 @@
 
 #define ANQOU_ASSERT assert
 
-void test_tokenize(const char *filepath,
-                   void (*testfunc)(Token *token_list, FILE *fp))
-{
-    FILE *fp = NULL;
-    Token *token_list;
+FILE *fmemopen(void *buf, size_t size, const char *mode);
 
-    fp = fopen(filepath, "r");
-    ANQOU_ASSERT(fp != NULL);
-    token_list = tokenize(fp);
-    fclose(fp);
-
-    fp = fopen(filepath, "r");
-    ANQOU_ASSERT(fp != NULL);
-    ANQOU_ASSERT(token_list != NULL);
-    testfunc(token_list, fp);
-    fclose(fp);
-
-    free_token_list(token_list);
-}
-
-void test_tokenize_numeric(Token *token_list, FILE *fp)
-{
-    float true_value;
-    Token *token;
-
-    for (token = token_list; token != NULL; token = token->next) {
-        fscanf(fp, "%f", &true_value);
-        ANQOU_ASSERT(token->kind == TOKEN_NUMERIC);
-        ANQOU_ASSERT(fabs(true_value - token->data.num) < 10e-5);
-    }
-}
-
-void test_tokenize_add(Token *token_list, FILE *fp)
+void test_new_simple_token()
 {
     Token *token;
 
-    for (token = token_list; token != NULL; token = token->next) {
-        float lhs_true_value, rhs_true_value;
+    token = new_simple_token(TOKEN_LPAREN);
+    ANQOU_ASSERT(token != NULL);
+    ANQOU_ASSERT(token->kind == TOKEN_LPAREN);
+    ANQOU_ASSERT(token->next == NULL);
+    free(token);
+}
 
-        fscanf(fp, "%f+%f", &lhs_true_value, &rhs_true_value);
+void test_tokenize(const char *program, ...)
+{
+    va_list answers;
+    FILE *fh;
+    Token *token;
 
-        ANQOU_ASSERT(token->kind == TOKEN_NUMERIC);
-        ANQOU_ASSERT(fabs(lhs_true_value - token->data.num) < 10e-5);
+    fh = fmemopen((void *)program, strlen(program), "rb");
+    token = tokenize(fh);
+    ANQOU_ASSERT(token != NULL);
+    fclose(fh);
 
+    va_start(answers, program);
+    while (token != NULL) {
+        int ans = va_arg(answers, int);
+
+        ANQOU_ASSERT(token->kind == ans);
         token = token->next;
-        ANQOU_ASSERT(token != NULL);
-        ANQOU_ASSERT(token->kind == TOKEN_ADD);
 
-        token = token->next;
-        ANQOU_ASSERT(token != NULL);
-        ANQOU_ASSERT(token->kind == TOKEN_NUMERIC);
-        ANQOU_ASSERT(fabs(rhs_true_value - token->data.num) < 10e-5);
+        ANQOU_ASSERT(token != NULL || ans == TOKEN_EOF);
+        ANQOU_ASSERT(ans != TOKEN_EOF || token == NULL);
     }
+    va_end(answers);
 }
 
 void execute_test()
 {
-    test_tokenize("test/test_tokenize_numeric.dat", test_tokenize_numeric);
-    test_tokenize("test/test_tokenize_add.dat", test_tokenize_add);
-    return;
+    test_new_simple_token();
+
+    test_tokenize("0+0;", TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC,
+                  TOKEN_SEMICOLON, TOKEN_EOF);
+    test_tokenize("0+0+0+0+0;", TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC,
+                  TOKEN_ADD, TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC, TOKEN_ADD,
+                  TOKEN_NUMERIC, TOKEN_SEMICOLON, TOKEN_EOF);
+    test_tokenize("0+0*0+0+0;", TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC,
+                  TOKEN_MUL, TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC, TOKEN_ADD,
+                  TOKEN_NUMERIC, TOKEN_SEMICOLON, TOKEN_EOF);
+    test_tokenize("0+0*0+0-0;", TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC,
+                  TOKEN_MUL, TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC, TOKEN_SUB,
+                  TOKEN_NUMERIC, TOKEN_SEMICOLON, TOKEN_EOF);
+    test_tokenize("(0+0)*0+0-0;", TOKEN_LPAREN, TOKEN_NUMERIC, TOKEN_ADD,
+                  TOKEN_NUMERIC, TOKEN_RPAREN, TOKEN_MUL, TOKEN_NUMERIC,
+                  TOKEN_ADD, TOKEN_NUMERIC, TOKEN_SUB, TOKEN_NUMERIC,
+                  TOKEN_SEMICOLON, TOKEN_EOF);
+    test_tokenize("asdg", TOKEN_LPAREN, TOKEN_NUMERIC, TOKEN_ADD, TOKEN_NUMERIC,
+                  TOKEN_RPAREN, TOKEN_MUL, TOKEN_NUMERIC, TOKEN_ADD,
+                  TOKEN_NUMERIC, TOKEN_SUB, TOKEN_NUMERIC, TOKEN_SEMICOLON,
+                  TOKEN_EOF);
 }

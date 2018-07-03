@@ -22,14 +22,16 @@ enum {
     TOKEN_MUL,
     TOKEN_DIV,
     TOKEN_SEMICOLON,
+    TOKEN_EOF,
 };
 
 struct Token {
+    int kind;
+
     union {
         float num;
         char str[10];
     } data;
-    int kind;
 
     Token *next;
 };
@@ -107,11 +109,14 @@ enum {
 Token *tokenize(FILE *fp)
 {
     char buf[256]; /* TODO: should be enough??? */
-    int bufidx, ch, st = TK_ST_INITIAL;
-    Token *token_list_tail = NULL, *token_list_head = NULL;
+    int bufidx, st = TK_ST_INITIAL;
+    Token *token = NULL, *token_list_tail = NULL, *token_list_head = NULL;
 
-    while ((ch = fgetc(fp)) != EOF) {
-        Token *token = NULL;
+    while (true) {
+        int ch;
+
+        ch = fgetc(fp);
+        if (ch == EOF) break;
 
         switch (st) {
             case TK_ST_INITIAL:
@@ -176,6 +181,12 @@ Token *tokenize(FILE *fp)
             if (token_list_head == NULL) token_list_head = token_list_tail;
         }
     }
+
+    token = new_simple_token(TOKEN_EOF);
+    // TODO: duplicate code
+    if (token_list_tail != NULL) token_list_tail->next = token;
+    token_list_tail = token;
+    if (token_list_head == NULL) token_list_head = token_list_tail;
 
     return token_list_head;
 }
@@ -728,7 +739,10 @@ int main(int argc, char **argv)
     ASTProg *prog;
     FILE *fh;
 
-    execute_test();
+    if (argc == 1) {
+        execute_test();
+        return 0;
+    }
 
     assert(argc == 3);
     fh = fopen(argv[1], "r");
