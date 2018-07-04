@@ -35,32 +35,35 @@ typedef struct Token {
 
 enum { AST_NUMBER, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
 
-typedef struct {
+typedef struct AST AST;
+struct AST {
     int kind;
-} AST;
 
-typedef struct ASTProg {
-    AST super;
-    AST *stmt;
-    struct ASTProg *next;
-} ASTProg;
+    union {
+        /* AST_PROG */
+        struct {
+            AST *stmt;
+            struct AST *next;
+        };
 
-typedef struct {
-    AST super;
-    float num;
-} ASTNumber;
+        /* AST_NUMBER */
+        struct {
+            float num;
+        };
 
-typedef struct {
-    AST super;
-    AST *lhs, *rhs;
-} ASTBinaryOp;
+        /* AST_ADD, AST_SUB, AST_MUL, AST_DIV */
+        struct {
+            AST *lhs, *rhs;
+        };
+    };
+};
 
 Token *new_simple_token(int kind);
 Token *new_number_token(float num);
 Token *tokenize(FILE *fp);
 void free_token_list(Token *token_list);
-ASTNumber *new_ast_number(float num);
-ASTBinaryOp *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
+AST *new_ast_number(float num);
+AST *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
 Token *pop_token(Token **token_list);
 Token *peek_token(Token **token_list);
 Token *pop_number_token(Token **token_list);
@@ -70,8 +73,8 @@ AST *parse_term_detail(Token **token_list, AST *factor);
 AST *parse_term(Token **token_list);
 AST *parse_expr_detail(Token **token_list, AST *term);
 AST *parse_expr(Token **token_list);
-ASTProg *parse_prog(Token **token_list);
-ASTProg *parse(Token *token_list);
+AST *parse_prog(Token **token_list);
+AST *parse(Token *token_list);
 void dump_token_list(Token *token_list);
 
 Token *new_simple_token(int kind)
@@ -193,25 +196,25 @@ void free_token_list(Token *token_list)
     }
 }
 
-ASTNumber *new_ast_number(float num)
+AST *new_ast_number(float num)
 {
-    ASTNumber *ast;
+    AST *ast;
 
-    ast = (ASTNumber *)malloc(sizeof(ASTNumber));
+    ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
-    ast->super.kind = AST_NUMBER;
+    ast->kind = AST_NUMBER;
     ast->num = num;
 
     return ast;
 }
 
-ASTBinaryOp *new_ast_binary_op(int kind, AST *lhs, AST *rhs)
+AST *new_ast_binary_op(int kind, AST *lhs, AST *rhs)
 {
-    ASTBinaryOp *ast;
+    AST *ast;
 
-    ast = (ASTBinaryOp *)malloc(sizeof(ASTBinaryOp));
+    ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
-    ast->super.kind = kind;
+    ast->kind = kind;
     ast->lhs = lhs;
     ast->rhs = rhs;
 
@@ -378,10 +381,10 @@ AST *parse_stmt(Token **token_list)
     return ast;
 }
 
-ASTProg *parse_prog(Token **token_list)
+AST *parse_prog(Token **token_list)
 {
     AST *stmt;
-    ASTProg *prog, *ast;
+    AST *prog, *ast;
 
     if (parse_match(token_list, tEOF) != NULL) return NULL;
 
@@ -389,18 +392,18 @@ ASTProg *parse_prog(Token **token_list)
     if (stmt == NULL) return NULL;
     prog = parse_prog(token_list);
 
-    ast = (ASTProg *)malloc(sizeof(ASTProg));
+    ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
-    ast->super.kind = AST_PROG;
+    ast->kind = AST_PROG;
     ast->stmt = stmt;
     ast->next = prog;
 
     return ast;
 }
 
-ASTProg *parse(Token *token_list)
+AST *parse(Token *token_list)
 {
-    ASTProg *prog;
+    AST *prog;
 
     prog = parse_prog(&token_list);
     assert(token_list == NULL);
@@ -412,37 +415,32 @@ float eval_ast(AST *ast)
 {
     switch (ast->kind) {
         case AST_PROG: {
-            ASTProg *prog = (ASTProg *)ast;
-            while (prog != NULL) {
-                printf("%f\n", eval_ast(prog->stmt));
-                prog = prog->next;
+            while (ast != NULL) {
+                assert(ast->kind == AST_PROG);
+                printf("%f\n", eval_ast(ast->stmt));
+                ast = ast->next;
             }
             return 0;
         }
 
         case AST_ADD: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            return eval_ast(bin->lhs) + eval_ast(bin->rhs);
+            return eval_ast(ast->lhs) + eval_ast(ast->rhs);
         }
 
         case AST_SUB: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            return eval_ast(bin->lhs) - eval_ast(bin->rhs);
+            return eval_ast(ast->lhs) - eval_ast(ast->rhs);
         }
 
         case AST_MUL: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            return eval_ast(bin->lhs) * eval_ast(bin->rhs);
+            return eval_ast(ast->lhs) * eval_ast(ast->rhs);
         }
 
         case AST_DIV: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            return eval_ast(bin->lhs) / eval_ast(bin->rhs);
+            return eval_ast(ast->lhs) / eval_ast(ast->rhs);
         }
 
         case AST_NUMBER: {
-            ASTNumber *num = (ASTNumber *)ast;
-            return num->num;
+            return ast->num;
         }
     }
 
@@ -455,10 +453,9 @@ void free_ast(AST *ast)
 
     switch (ast->kind) {
         case AST_PROG: {
-            ASTProg *prog = (ASTProg *)ast;
-            free_ast(prog->stmt);
-            free_ast((AST *)prog->next);
-            free(prog);
+            free_ast(ast->stmt);
+            free_ast((AST *)ast->next);
+            free(ast);
             return;
         }
 
@@ -466,16 +463,14 @@ void free_ast(AST *ast)
         case AST_SUB:
         case AST_MUL:
         case AST_DIV: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
-            free_ast(bin->lhs);
-            free_ast(bin->rhs);
-            free(bin);
+            free_ast(ast->lhs);
+            free_ast(ast->rhs);
+            free(ast);
             return;
         }
 
         case AST_NUMBER: {
-            ASTNumber *num = (ASTNumber *)ast;
-            free(num);
+            free(ast);
             return;
         }
     }
@@ -634,9 +629,8 @@ void write_obj_detail(AST *ast, ObjEnv *env)
 
     switch (ast->kind) {
         case AST_PROG: {
-            ASTProg *prog = (ASTProg *)ast;
-            write_obj_detail(prog->stmt, env);
-            write_obj_detail((AST *)prog->next, env);
+            write_obj_detail(ast->stmt, env);
+            write_obj_detail(ast->next, env);
             return;
         }
 
@@ -644,14 +638,13 @@ void write_obj_detail(AST *ast, ObjEnv *env)
         case AST_SUB:
         case AST_MUL:
         case AST_DIV: {
-            ASTBinaryOp *bin = (ASTBinaryOp *)ast;
             char op[32];
 
-            write_obj_detail(bin->rhs, env);
+            write_obj_detail(ast->rhs, env);
             codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
                           ++env->stack_idx * 4);
             env->stack_max_idx = fmax(env->stack_max_idx, env->stack_idx);
-            write_obj_detail(bin->lhs, env);
+            write_obj_detail(ast->lhs, env);
 
             switch (ast->kind) {
                 case AST_ADD:
@@ -675,11 +668,9 @@ void write_obj_detail(AST *ast, ObjEnv *env)
         }
 
         case AST_NUMBER: {
-            ASTNumber *num = (ASTNumber *)ast;
-
             codes_append(env->codes, ".data");
             codes_appendf(env->codes, ".L%d:", env->nlabel++);
-            codes_appendf(env->codes, ".float %f", num->num);
+            codes_appendf(env->codes, ".float %f", ast->num);
             codes_append(env->codes, ".text");
             codes_appendf(env->codes, "movss .L%d(%%rip), %%xmm0",
                           env->nlabel - 1);
@@ -688,10 +679,12 @@ void write_obj_detail(AST *ast, ObjEnv *env)
     }
 }
 
-void write_obj(ASTProg *prog, FILE *fh)
+void write_obj(AST *prog, FILE *fh)
 {
     ObjEnv *env;
     Codes *header;
+
+    assert(prog->kind == AST_PROG);
 
     env = new_objenv();
 
@@ -705,7 +698,7 @@ void write_obj(ASTProg *prog, FILE *fh)
     codes_append(env->codes, "mov %rsp, %rbp");
     header = objenv_swap_codes(env, new_codes());
 
-    write_obj_detail((AST *)prog, env);
+    write_obj_detail(prog, env);
 
     if (env->stack_max_idx > 0)
         codes_appendf(header, "sub $%d, %%rsp",
@@ -732,7 +725,7 @@ void write_obj(ASTProg *prog, FILE *fh)
 int main(int argc, char **argv)
 {
     Token *token_list;
-    ASTProg *prog;
+    AST *prog;
     FILE *fh;
 
     if (argc == 1) {
@@ -750,7 +743,7 @@ int main(int argc, char **argv)
     dump_token_list(token_list);
 
     prog = parse(token_list);
-    eval_ast((AST *)prog);
+    eval_ast(prog);
 
     fh = fopen(argv[2], "w");
     assert(fh != NULL);
