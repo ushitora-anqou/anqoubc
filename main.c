@@ -33,11 +33,21 @@ typedef struct Token {
     struct Token *next;
 } Token;
 
-enum { AST_NUMBER, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
+enum {
+    TY_INT,
+    TY_FLOAT,
+};
+
+typedef struct {
+    int kind;
+} Type;
+
+enum { AST_FLOAT, AST_INT, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
 
 typedef struct AST AST;
 struct AST {
     int kind;
+    Type *type;
 
     union {
         /* AST_PROG */
@@ -46,10 +56,11 @@ struct AST {
             struct AST *next;
         };
 
-        /* AST_NUMBER */
-        struct {
-            float num;
-        };
+        /* AST_FLOAT */
+        float fval;
+
+        /* AST_INT */
+        int ival;
 
         /* AST_ADD, AST_SUB, AST_MUL, AST_DIV */
         struct {
@@ -62,7 +73,7 @@ Token *new_simple_token(int kind);
 Token *new_number_token(float num);
 Token *tokenize(FILE *fp);
 void free_token_list(Token *token_list);
-AST *new_ast_number(float num);
+AST *new_ast_float(float num);
 AST *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
 Token *pop_token(Token **token_list);
 Token *peek_token(Token **token_list);
@@ -196,14 +207,14 @@ void free_token_list(Token *token_list)
     }
 }
 
-AST *new_ast_number(float num)
+AST *new_ast_float(float val)
 {
     AST *ast;
 
     ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
-    ast->kind = AST_NUMBER;
-    ast->num = num;
+    ast->kind = AST_FLOAT;
+    ast->fval = val;
 
     return ast;
 }
@@ -267,7 +278,7 @@ AST *parse_factor(Token **token_list)
 
         dump_token_list(*token_list);
 
-        ast = (AST *)new_ast_number(token->data.num);
+        ast = (AST *)new_ast_float(token->data.num);
     }
 
     return ast;
@@ -411,6 +422,7 @@ AST *parse(Token *token_list)
     return prog;
 }
 
+/*
 float eval_ast(AST *ast)
 {
     switch (ast->kind) {
@@ -439,13 +451,14 @@ float eval_ast(AST *ast)
             return eval_ast(ast->lhs) / eval_ast(ast->rhs);
         }
 
-        case AST_NUMBER: {
-            return ast->num;
+        case AST_FLOAT: {
+            return ast->fval;
         }
     }
 
     assert(false);
 }
+*/
 
 void free_ast(AST *ast)
 {
@@ -469,7 +482,8 @@ void free_ast(AST *ast)
             return;
         }
 
-        case AST_NUMBER: {
+        case AST_FLOAT:
+        case AST_INT: {
             free(ast);
             return;
         }
@@ -667,10 +681,10 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             return;
         }
 
-        case AST_NUMBER: {
+        case AST_FLOAT: {
             codes_append(env->codes, ".data");
             codes_appendf(env->codes, ".L%d:", env->nlabel++);
-            codes_appendf(env->codes, ".float %f", ast->num);
+            codes_appendf(env->codes, ".float %f", ast->fval);
             codes_append(env->codes, ".text");
             codes_appendf(env->codes, "movss .L%d(%%rip), %%xmm0",
                           env->nlabel - 1);
@@ -743,7 +757,6 @@ int main(int argc, char **argv)
     dump_token_list(token_list);
 
     prog = parse(token_list);
-    eval_ast(prog);
 
     fh = fopen(argv[2], "w");
     assert(fh != NULL);
