@@ -42,12 +42,12 @@ typedef struct {
     int kind;
 } Type;
 
-enum { AST_FLOAT, AST_INT, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
+enum { AST_LITERAL, AST_ADD, AST_SUB, AST_MUL, AST_DIV, AST_PROG };
 
 typedef struct AST AST;
 struct AST {
     int kind;
-    Type *type;
+    Type type;
 
     union {
         /* AST_PROG */
@@ -56,10 +56,8 @@ struct AST {
             struct AST *next;
         };
 
-        /* AST_FLOAT */
+        /* AST_LITERAL */
         float fval;
-
-        /* AST_INT */
         int ival;
 
         /* AST_ADD, AST_SUB, AST_MUL, AST_DIV */
@@ -213,7 +211,8 @@ AST *new_ast_float(float val)
 
     ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
-    ast->kind = AST_FLOAT;
+    ast->kind = AST_LITERAL;
+    ast->type.kind = TY_FLOAT;
     ast->fval = val;
 
     return ast;
@@ -226,6 +225,7 @@ AST *new_ast_binary_op(int kind, AST *lhs, AST *rhs)
     ast = (AST *)malloc(sizeof(AST));
     assert(ast != NULL);
     ast->kind = kind;
+    ast->type.kind = lhs->type.kind; /* TODO */
     ast->lhs = lhs;
     ast->rhs = rhs;
 
@@ -450,10 +450,6 @@ float eval_ast(AST *ast)
         case AST_DIV: {
             return eval_ast(ast->lhs) / eval_ast(ast->rhs);
         }
-
-        case AST_FLOAT: {
-            return ast->fval;
-        }
     }
 
     assert(false);
@@ -482,8 +478,7 @@ void free_ast(AST *ast)
             return;
         }
 
-        case AST_FLOAT:
-        case AST_INT: {
+        case AST_LITERAL: {
             free(ast);
             return;
         }
@@ -681,13 +676,15 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             return;
         }
 
-        case AST_FLOAT: {
-            codes_append(env->codes, ".data");
-            codes_appendf(env->codes, ".L%d:", env->nlabel++);
-            codes_appendf(env->codes, ".float %f", ast->fval);
-            codes_append(env->codes, ".text");
-            codes_appendf(env->codes, "movss .L%d(%%rip), %%xmm0",
-                          env->nlabel - 1);
+        case AST_LITERAL: {
+            if (ast->type.kind == TY_FLOAT) {
+                codes_append(env->codes, ".data");
+                codes_appendf(env->codes, ".L%d:", env->nlabel++);
+                codes_appendf(env->codes, ".float %f", ast->fval);
+                codes_append(env->codes, ".text");
+                codes_appendf(env->codes, "movss .L%d(%%rip), %%xmm0",
+                              env->nlabel - 1);
+            }
             return;
         }
     }
