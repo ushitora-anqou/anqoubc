@@ -383,6 +383,8 @@ ASTProg *parse_prog(Token **token_list)
     AST *stmt;
     ASTProg *prog, *ast;
 
+    if (parse_match(token_list, tEOF) != NULL) return NULL;
+
     stmt = parse_stmt(token_list);
     if (stmt == NULL) return NULL;
     prog = parse_prog(token_list);
@@ -514,7 +516,11 @@ void dump_token_list(Token *token)
                 break;
 
             case tSEMICOLON:
-                printf(";\n");
+                printf("; ");
+                break;
+
+            case tEOF:
+                printf("<EOF> ");
                 break;
 
             default:
@@ -707,6 +713,7 @@ void write_obj(ASTProg *prog, FILE *fh)
 
     codes_append(env->codes, "cvtss2sd %xmm0, %xmm0");
     codes_append(env->codes, "lea format(%rip), %rdi");
+    codes_append(env->codes, "mov $1, %eax");
     codes_append(env->codes, "call printf");
     codes_append(env->codes, "leave");
     codes_append(env->codes, "ret");
