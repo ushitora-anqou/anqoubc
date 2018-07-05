@@ -4,17 +4,6 @@
 
 FILE *fmemopen(void *buf, size_t size, const char *mode);
 
-void test_new_simple_token()
-{
-    Token *token;
-
-    token = new_simple_token(tLPAREN);
-    ANQOU_ASSERT(token != NULL);
-    ANQOU_ASSERT(token->kind == tLPAREN);
-    ANQOU_ASSERT(token->next == NULL);
-    free(token);
-}
-
 void test_tokenize(const char *program, ...)
 {
     va_list answers;
@@ -41,16 +30,13 @@ void test_tokenize(const char *program, ...)
 
 void execute_test()
 {
-    test_new_simple_token();
-
-    test_tokenize("0+0;", tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
-    test_tokenize("0+0+0+0+0;", tNUMBER, tADD, tNUMBER, tADD, tNUMBER, tADD,
-                  tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0+0;", tNUMBER, tADD, tNUMBER, tMUL, tNUMBER, tADD,
-                  tNUMBER, tADD, tNUMBER, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0-0;", tNUMBER, tADD, tNUMBER, tMUL, tNUMBER, tADD,
-                  tNUMBER, tSUB, tNUMBER, tSEMICOLON, tEOF);
-    test_tokenize("(0+0)*0+0-0;", tLPAREN, tNUMBER, tADD, tNUMBER, tRPAREN,
-                  tMUL, tNUMBER, tADD, tNUMBER, tSUB, tNUMBER, tSEMICOLON,
-                  tEOF);
+    test_tokenize("0+0;", tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0+0+0+0;", tFLOAT, tADD, tFLOAT, tADD, tFLOAT, tADD,
+                  tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0+0;", tFLOAT, tADD, tFLOAT, tMUL, tFLOAT, tADD,
+                  tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0-0;", tFLOAT, tADD, tFLOAT, tMUL, tFLOAT, tADD,
+                  tFLOAT, tSUB, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("(0+0)*0+0-0;", tLPAREN, tFLOAT, tADD, tFLOAT, tRPAREN, tMUL,
+                  tFLOAT, tADD, tFLOAT, tSUB, tFLOAT, tSEMICOLON, tEOF);
 }

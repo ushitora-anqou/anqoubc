@@ -7,10 +7,11 @@
 #define true 1
 #define false 0
 
-float fmax(float lhs, float rhs) { return lhs < rhs ? rhs : lhs; }
+int max(int lhs, int rhs) { return lhs < rhs ? rhs : lhs; }
 
 enum {
-    tNUMBER,
+    tINTEGER,
+    tFLOAT,
     tLPAREN,
     tRPAREN,
     tVARIABLE,
@@ -26,9 +27,9 @@ typedef struct Token {
     int kind;
 
     union {
-        float num;
-        char str[10];
-    } data;
+        double fval;
+        long ival;
+    };
 
     struct Token *next;
 } Token;
@@ -57,8 +58,8 @@ struct AST {
         };
 
         /* AST_LITERAL */
-        float fval;
-        int ival;
+        double fval;
+        long ival;
 
         /* AST_ADD, AST_SUB, AST_MUL, AST_DIV */
         struct {
@@ -67,11 +68,11 @@ struct AST {
     };
 };
 
-Token *new_simple_token(int kind);
-Token *new_number_token(float num);
+Token *new_token(int kind);
+Token *new_token_float(double num);
 Token *tokenize(FILE *fp);
 void free_token_list(Token *token_list);
-AST *new_ast_float(float num);
+AST *new_ast_float(double num);
 AST *new_ast_binary_op(int kind, AST *lhs, AST *rhs);
 Token *pop_token(Token **token_list);
 Token *peek_token(Token **token_list);
@@ -86,7 +87,9 @@ AST *parse_prog(Token **token_list);
 AST *parse(Token *token_list);
 void dump_token_list(Token *token_list);
 
-Token *new_simple_token(int kind)
+/********** Token *************/
+
+Token *new_token(int kind)
 {
     Token *token;
 
@@ -96,11 +99,11 @@ Token *new_simple_token(int kind)
     return token;
 }
 
-Token *new_number_token(float num)
+Token *new_token_float(double fval)
 {
-    Token *token = new_simple_token(tNUMBER);
+    Token *token = new_token(tFLOAT);
 
-    token->data.num = num;
+    token->fval = fval;
     return token;
 }
 
@@ -134,25 +137,25 @@ Token *tokenize(FILE *fp)
                 }
                 switch (ch) {
                     case '+':
-                        token = new_simple_token(tADD);
+                        token = new_token(tADD);
                         break;
                     case '-':
-                        token = new_simple_token(tSUB);
+                        token = new_token(tSUB);
                         break;
                     case '*':
-                        token = new_simple_token(tMUL);
+                        token = new_token(tMUL);
                         break;
                     case '/':
-                        token = new_simple_token(tDIV);
+                        token = new_token(tDIV);
                         break;
                     case '(':
-                        token = new_simple_token(tLPAREN);
+                        token = new_token(tLPAREN);
                         break;
                     case ')':
-                        token = new_simple_token(tRPAREN);
+                        token = new_token(tRPAREN);
                         break;
                     case ';':
-                        token = new_simple_token(tSEMICOLON);
+                        token = new_token(tSEMICOLON);
                         break;
                 }
                 if (token != NULL) break;
@@ -168,7 +171,7 @@ Token *tokenize(FILE *fp)
 
                 assert(bufidx < sizeof(buf) - 1);
                 buf[bufidx++] = '\0';
-                token = new_number_token(atof(buf));
+                token = new_token_float(atof(buf));
 
                 st = TK_ST_INITIAL;
 
@@ -186,7 +189,7 @@ Token *tokenize(FILE *fp)
         }
     }
 
-    token = new_simple_token(tEOF);
+    token = new_token(tEOF);
     /* TODO: duplicate code */
     if (token_list_tail != NULL) token_list_tail->next = token;
     token_list_tail = token;
@@ -205,7 +208,9 @@ void free_token_list(Token *token_list)
     }
 }
 
-AST *new_ast_float(float val)
+/******** AST *********/
+
+AST *new_ast_float(double val)
 {
     AST *ast;
 
@@ -243,11 +248,11 @@ Token *pop_token(Token **token_list)
 
 Token *peek_token(Token **token_list) { return *token_list; }
 
-Token *pop_number_token(Token **token_list)
+Token *pop_float_token(Token **token_list)
 {
     Token *token = peek_token(token_list);
 
-    if (token == NULL || token->kind != tNUMBER) return NULL;
+    if (token == NULL || token->kind != tFLOAT) return NULL;
     return pop_token(token_list);
 }
 
@@ -273,12 +278,12 @@ AST *parse_factor(Token **token_list)
         /* number */
         Token *token;
 
-        token = pop_number_token(token_list);
+        token = pop_float_token(token_list);
         if (token == NULL) return NULL;
 
         dump_token_list(*token_list);
 
-        ast = (AST *)new_ast_float(token->data.num);
+        ast = (AST *)new_ast_float(token->fval);
     }
 
     return ast;
@@ -491,8 +496,12 @@ void dump_token_list(Token *token)
 {
     for (; token != NULL; token = token->next) {
         switch (token->kind) {
-            case tNUMBER:
-                printf("%f ", token->data.num);
+            case tFLOAT:
+                printf("%lf ", token->fval);
+                break;
+
+            case tINTEGER:
+                printf("%ld ", token->ival);
                 break;
 
             case tADD:
@@ -652,7 +661,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             write_obj_detail(ast->rhs, env);
             codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
                           ++env->stack_idx * 4);
-            env->stack_max_idx = fmax(env->stack_max_idx, env->stack_idx);
+            env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
             write_obj_detail(ast->lhs, env);
 
             switch (ast->kind) {
