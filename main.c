@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+long: 8-byte integer
+double: 8-byte float
+*/
+
 #define true 1
 #define false 0
 
