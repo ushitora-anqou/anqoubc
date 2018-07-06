@@ -8,6 +8,15 @@
 long: 8-byte integer
 double: 8-byte float
 */
+enum {
+    SZ_LONG = 8,
+    SZ_DOUBLE = 8,
+
+    SZ_BYTE = 1,
+    SZ_WORD = 2,
+    SZ_DWORD = 4,
+    SZ_QWORD = 8,
+};
 
 #define true 1
 #define false 0
@@ -700,6 +709,17 @@ Codes *objenv_swap_codes(ObjEnv *this, Codes *rhs)
     return tmp;
 }
 
+void objenv_add_stack_idx(ObjEnv *this, int nbytes)
+{
+    this->stack_idx += nbytes;
+    this->stack_max_idx = max(this->stack_max_idx, this->stack_idx);
+}
+
+void objenv_sub_stack_idx(ObjEnv *this, int nbytes)
+{
+    this->stack_idx -= nbytes;
+}
+
 void write_obj_detail(AST *ast, ObjEnv *env)
 {
     if (ast == NULL) return;
@@ -733,14 +753,14 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             if (ast->lhs->type.kind == TY_LONG &&
                 ast->rhs->type.kind == TY_LONG) {
                 write_obj_detail(ast->rhs, env);
+                objenv_add_stack_idx(env, SZ_QWORD);
                 codes_appendf(env->codes, "mov %%rax, -%d(%%rbp)",
-                              ++env->stack_idx * 8);
-                env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
+                              env->stack_idx);
                 write_obj_detail(ast->lhs, env);
                 if (ast->kind == AST_DIV) {
                     codes_append(env->codes, "cltd");
                     codes_appendf(env->codes, "idivq -%d(%%rbp)",
-                                  env->stack_idx * 8);
+                                  env->stack_idx);
                 }
                 else {
                     switch (ast->kind) {
@@ -755,40 +775,35 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                             break;
                     }
                     codes_appendf(env->codes, "%s -%d(%%rbp), %%rax", op,
-                                  env->stack_idx * 8);
+                                  env->stack_idx);
                 }
-                env->stack_idx--;
+                objenv_sub_stack_idx(env, SZ_QWORD);
                 break;
             }
 
             /* TODO: duplicate code */
             write_obj_detail(ast->rhs, env);
+            objenv_add_stack_idx(env, SZ_QWORD);
             if (ast->lhs->type.kind == TY_LONG &&
                 ast->rhs->type.kind == TY_DOUBLE) {
-                env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 8);
-                env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
+                              env->stack_idx);
                 write_obj_detail(ast->lhs, env);
                 codes_append(env->codes, "cvtsi2sd %rax, %xmm0");
             }
             else if (ast->lhs->type.kind == TY_DOUBLE &&
                      ast->rhs->type.kind == TY_LONG) {
                 codes_append(env->codes, "cvtsi2sd %rax, %xmm0");
-                env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 8);
-                env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
+                              env->stack_idx);
                 write_obj_detail(ast->lhs, env);
             }
             else {
                 assert(ast->lhs->type.kind == TY_DOUBLE &&
                        ast->rhs->type.kind == TY_DOUBLE);
 
-                env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 8);
-                env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
+                              env->stack_idx);
                 write_obj_detail(ast->lhs, env);
             }
 
@@ -808,8 +823,8 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             }
 
             codes_appendf(env->codes, "%s -%d(%%rbp), %%xmm0", op,
-                          env->stack_idx * 8);
-            env->stack_idx -= 2;
+                          env->stack_idx);
+            objenv_sub_stack_idx(env, SZ_QWORD);
 
             return;
         }
