@@ -772,9 +772,10 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
             }
-            else /* if (ast->lhs->type.kind == TY_DOUBLE &&
-                        ast->rhs->type.kind == TY_DOUBLE) */
-            {
+            else {
+                assert(ast->lhs->type.kind == TY_DOUBLE &&
+                       ast->rhs->type.kind == TY_DOUBLE);
+
                 env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
                               env->stack_idx * 4);
