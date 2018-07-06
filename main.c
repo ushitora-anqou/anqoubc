@@ -757,7 +757,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             if (ast->lhs->type.kind == TY_LONG &&
                 ast->rhs->type.kind == TY_DOUBLE) {
                 env->stack_idx += 2;
-                codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
+                codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
                               env->stack_idx * 4);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
@@ -767,7 +767,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                      ast->rhs->type.kind == TY_LONG) {
                 codes_append(env->codes, "cvtsi2sd %eax, %xmm0");
                 env->stack_idx += 2;
-                codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
+                codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
                               env->stack_idx * 4);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
@@ -776,7 +776,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                         ast->rhs->type.kind == TY_DOUBLE) */
             {
                 env->stack_idx += 2;
-                codes_appendf(env->codes, "movss %%xmm0, -%d(%%rbp)",
+                codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
                               env->stack_idx * 4);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
@@ -784,16 +784,16 @@ void write_obj_detail(AST *ast, ObjEnv *env)
 
             switch (ast->kind) {
                 case AST_ADD:
-                    strcpy(op, "addss");
+                    strcpy(op, "addsd");
                     break;
                 case AST_SUB:
-                    strcpy(op, "subss");
+                    strcpy(op, "subsd");
                     break;
                 case AST_MUL:
-                    strcpy(op, "mulss");
+                    strcpy(op, "mulsd");
                     break;
                 case AST_DIV:
-                    strcpy(op, "divss");
+                    strcpy(op, "divsd");
                     break;
             }
 
