@@ -19,7 +19,7 @@ test_anqoubc() {
     rm $tempres
 }
 
-seq -f "%02.f" 1 10 | while read i; do
+seq -f "%02.f" 1 11 | while read i; do
     test_anqoubc "test/compile_$i.in" "test/compile_$i.out"
 done
 

@@ -15,10 +15,10 @@ enum {
     tLPAREN,
     tRPAREN,
     tVARIABLE,
-    tADD,
-    tSUB,
-    tMUL,
-    tDIV,
+    tPLUS,
+    tMINUS,
+    tSTAR,
+    tSLASH,
     tSEMICOLON,
     tEOF,
 };
@@ -155,16 +155,16 @@ Token *tokenize(FILE *fp)
 
                 switch (ch) {
                     case '+':
-                        token = new_token(tADD);
+                        token = new_token(tPLUS);
                         break;
                     case '-':
-                        token = new_token(tSUB);
+                        token = new_token(tMINUS);
                         break;
                     case '*':
-                        token = new_token(tMUL);
+                        token = new_token(tSTAR);
                         break;
                     case '/':
-                        token = new_token(tDIV);
+                        token = new_token(tSLASH);
                         break;
                     case '(':
                         token = new_token(tLPAREN);
@@ -329,12 +329,16 @@ AST *parse_factor(Token **token_list)
 
     /* number */
     Token *token;
+    int minus = 1;
+
+    token = pop_token_if(token_list, tMINUS);
+    if (token != NULL) minus = -1;
 
     token = pop_token_if(token_list, tFLOAT);
-    if (token != NULL) return new_ast_float(token->fval);
+    if (token != NULL) return new_ast_float(minus * token->fval);
 
     token = pop_token_if(token_list, tINTEGER);
-    if (token != NULL) return new_ast_integer(token->ival);
+    if (token != NULL) return new_ast_integer(minus * token->ival);
 
     return NULL;
 }
@@ -344,7 +348,7 @@ AST *parse_term_detail(Token **token_list, AST *factor)
     Token *op;
     AST *ast = factor;
 
-    if ((op = parse_match(token_list, tMUL)) != NULL) {
+    if ((op = parse_match(token_list, tSTAR)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = factor;
@@ -353,7 +357,7 @@ AST *parse_term_detail(Token **token_list, AST *factor)
         ast = (AST *)new_ast_binary_op(AST_MUL, lhs, rhs);
         ast = parse_term_detail(token_list, ast);
     }
-    else if ((op = parse_match(token_list, tDIV)) != NULL) {
+    else if ((op = parse_match(token_list, tSLASH)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = factor;
@@ -389,7 +393,7 @@ AST *parse_expr_detail(Token **token_list, AST *term)
     Token *op;
     AST *ast = term;
 
-    if ((op = parse_match(token_list, tADD)) != NULL) {
+    if ((op = parse_match(token_list, tPLUS)) != NULL) {
         AST *lhs, *rhs;
 
         dump_token_list(*token_list);
@@ -400,7 +404,7 @@ AST *parse_expr_detail(Token **token_list, AST *term)
         ast = (AST *)new_ast_binary_op(AST_ADD, lhs, rhs);
         ast = parse_expr_detail(token_list, ast);
     }
-    else if ((op = parse_match(token_list, tSUB)) != NULL) {
+    else if ((op = parse_match(token_list, tMINUS)) != NULL) {
         AST *lhs, *rhs;
 
         lhs = term;
@@ -554,19 +558,19 @@ void dump_token_list(Token *token)
                 printf("%ldi ", token->ival);
                 break;
 
-            case tADD:
+            case tPLUS:
                 printf("+ ");
                 break;
 
-            case tSUB:
+            case tMINUS:
                 printf("- ");
                 break;
 
-            case tMUL:
+            case tSTAR:
                 printf("* ");
                 break;
 
-            case tDIV:
+            case tSLASH:
                 printf("/ ");
                 break;
 
@@ -704,7 +708,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                     break;
 
                 case TY_LONG:
-                    codes_append(env->codes, "mov %eax, %esi");
+                    codes_append(env->codes, "mov %rax, %rsi");
                     codes_append(env->codes, "lea longfmt(%rip), %rdi");
                     break;
             }
@@ -724,14 +728,14 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             if (ast->lhs->type.kind == TY_LONG &&
                 ast->rhs->type.kind == TY_LONG) {
                 write_obj_detail(ast->rhs, env);
-                codes_appendf(env->codes, "mov %%eax, -%d(%%rbp)",
-                              ++env->stack_idx * 4);
+                codes_appendf(env->codes, "mov %%rax, -%d(%%rbp)",
+                              ++env->stack_idx * 8);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
                 if (ast->kind == AST_DIV) {
                     codes_append(env->codes, "cltd");
-                    codes_appendf(env->codes, "idivl -%d(%%rbp)",
-                                  env->stack_idx * 4);
+                    codes_appendf(env->codes, "idivq -%d(%%rbp)",
+                                  env->stack_idx * 8);
                 }
                 else {
                     switch (ast->kind) {
@@ -745,8 +749,8 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                             strcpy(op, "imul");
                             break;
                     }
-                    codes_appendf(env->codes, "%s -%d(%%rbp), %%eax", op,
-                                  env->stack_idx * 4);
+                    codes_appendf(env->codes, "%s -%d(%%rbp), %%rax", op,
+                                  env->stack_idx * 8);
                 }
                 env->stack_idx--;
                 break;
@@ -758,17 +762,17 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                 ast->rhs->type.kind == TY_DOUBLE) {
                 env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 4);
+                              env->stack_idx * 8);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
-                codes_append(env->codes, "cvtsi2sd %eax, %xmm0");
+                codes_append(env->codes, "cvtsi2sd %rax, %xmm0");
             }
             else if (ast->lhs->type.kind == TY_DOUBLE &&
                      ast->rhs->type.kind == TY_LONG) {
-                codes_append(env->codes, "cvtsi2sd %eax, %xmm0");
+                codes_append(env->codes, "cvtsi2sd %rax, %xmm0");
                 env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 4);
+                              env->stack_idx * 8);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
             }
@@ -778,7 +782,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
 
                 env->stack_idx += 2;
                 codes_appendf(env->codes, "movsd %%xmm0, -%d(%%rbp)",
-                              env->stack_idx * 4);
+                              env->stack_idx * 8);
                 env->stack_max_idx = max(env->stack_max_idx, env->stack_idx);
                 write_obj_detail(ast->lhs, env);
             }
@@ -799,7 +803,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
             }
 
             codes_appendf(env->codes, "%s -%d(%%rbp), %%xmm0", op,
-                          env->stack_idx * 4);
+                          env->stack_idx * 8);
             env->stack_idx -= 2;
 
             return;
@@ -817,7 +821,7 @@ void write_obj_detail(AST *ast, ObjEnv *env)
                     break;
 
                 case TY_LONG:
-                    codes_appendf(env->codes, "mov $%ld, %%eax", ast->ival);
+                    codes_appendf(env->codes, "mov $%ld, %%rax", ast->ival);
                     break;
             }
             return;
@@ -850,7 +854,7 @@ void write_obj(AST *prog, FILE *fh)
 
     if (env->stack_max_idx > 0)
         codes_appendf(header, "sub $%d, %%rsp",
-                      ((env->stack_max_idx / 16) + 1) * 16);
+                      ((env->stack_max_idx * 8 / 16) + 1) * 16);
     codes_append(env->codes, "mov $0, %eax");
     codes_append(env->codes, "leave");
     codes_append(env->codes, "ret");

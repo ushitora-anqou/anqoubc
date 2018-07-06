@@ -30,13 +30,14 @@ void test_tokenize(const char *program, ...)
 
 void execute_test()
 {
-    test_tokenize("0+0;", tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
-    test_tokenize("0+0+0+0+0;", tFLOAT, tADD, tFLOAT, tADD, tFLOAT, tADD,
-                  tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0+0;", tFLOAT, tADD, tFLOAT, tMUL, tFLOAT, tADD,
-                  tFLOAT, tADD, tFLOAT, tSEMICOLON, tEOF);
-    test_tokenize("0+0*0+0-0;", tFLOAT, tADD, tFLOAT, tMUL, tFLOAT, tADD,
-                  tFLOAT, tSUB, tFLOAT, tSEMICOLON, tEOF);
-    test_tokenize("(0+0)*0+0-0;", tLPAREN, tFLOAT, tADD, tFLOAT, tRPAREN, tMUL,
-                  tFLOAT, tADD, tFLOAT, tSUB, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0;", tFLOAT, tPLUS, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0+0+0+0;", tFLOAT, tPLUS, tFLOAT, tPLUS, tFLOAT, tPLUS,
+                  tFLOAT, tPLUS, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0+0;", tFLOAT, tPLUS, tFLOAT, tSTAR, tFLOAT, tPLUS,
+                  tFLOAT, tPLUS, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("0+0*0+0-0;", tFLOAT, tPLUS, tFLOAT, tSTAR, tFLOAT, tPLUS,
+                  tFLOAT, tMINUS, tFLOAT, tSEMICOLON, tEOF);
+    test_tokenize("(0+0)*0+0-0;", tLPAREN, tFLOAT, tPLUS, tFLOAT, tRPAREN,
+                  tSTAR, tFLOAT, tPLUS, tFLOAT, tMINUS, tFLOAT, tSEMICOLON,
+                  tEOF);
 }
